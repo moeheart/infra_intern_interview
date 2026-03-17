@@ -1,0 +1,109 @@
+syntax = "proto3";
+
+package nebius.compute.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// Top-level Instance resource
+message Instance {
+  ResourceMetadata metadata = 1;
+  InstanceSpec spec = 2;
+  InstanceStatus status = 3;
+}
+
+message ResourceMetadata {
+  string id = 1;
+  string parent_id = 2;
+  string name = 3;
+  int64 resource_version = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp updated_at = 6;
+  map<string, string> labels = 7;
+}
+
+message InstanceSpec {
+  ResourcesSpec resources = 1;
+  repeated NetworkInterfaceSpec network_interfaces = 2;
+  AttachedDiskSpec boot_disk = 3;
+  string cloud_init_user_data = 4;
+  bool stopped = 5;
+  ReservationPolicy reservation_policy = 6;
+}
+
+message ResourcesSpec {
+  string platform = 1;    // e.g. "gpu-h100-sxm"
+  string preset = 2;      // e.g. "8gpu-160vcpu-1600gb"
+}
+
+message NetworkInterfaceSpec {
+  string name = 1;
+  string subnet_id = 2;
+  string ip_address = 3;
+}
+
+message AttachedDiskSpec {
+  string existing_disk_id = 1;
+  string attach_mode = 2;  // READ_WRITE, READ_ONLY
+}
+
+// Reservation policy for instance placement
+message ReservationPolicy {
+  ReservationPolicyType policy = 1;
+  repeated string reservation_ids = 2;  // Used with STRICT policy
+}
+
+enum ReservationPolicyType {
+  AUTO = 0;     // Auto-place in any matching reservation, fall back to on-demand
+  FORBID = 1;   // Never use reservation, always on-demand
+  STRICT = 2;   // Must use one of the specified reservation_ids, fail if none available
+}
+
+message InstanceStatus {
+  InstanceState state = 1;
+  repeated NetworkInterfaceStatus network_interfaces = 2;
+  bool reconciling = 3;
+  string reservation_id = 4;  // Which reservation is being used (empty = on-demand)
+}
+
+enum InstanceState {
+  STATE_UNSPECIFIED = 0;
+  CREATING = 1;
+  RUNNING = 2;
+  STOPPING = 3;
+  STOPPED = 4;
+  STARTING = 5;
+  DELETING = 6;
+  ERROR = 7;
+}
+
+message NetworkInterfaceStatus {
+  string name = 1;
+  string ip_address = 2;
+  string public_ip_address = 3;
+}
+
+// Reservation resource
+message Reservation {
+  ResourceMetadata metadata = 1;
+  ReservationSpec spec = 2;
+  ReservationStatus status = 3;
+}
+
+message ReservationSpec {
+  string platform = 1;
+  string preset = 2;
+  int32 total_units = 3;
+}
+
+message ReservationStatus {
+  ReservationState state = 1;
+  int32 used_units = 2;
+  int32 available_units = 3;
+}
+
+enum ReservationState {
+  RESERVATION_STATE_UNSPECIFIED = 0;
+  RESERVATION_ACTIVE = 1;
+  RESERVATION_EXPIRED = 2;
+  RESERVATION_PENDING = 3;
+}

@@ -1,0 +1,99 @@
+syntax = "proto3";
+
+package nebius.compute.v1;
+
+import "nebius/compute/v1/instance.proto";
+
+// InstanceService provides CRUD + lifecycle operations for compute instances.
+service InstanceService {
+  // Get returns a single instance by ID.
+  rpc Get(GetInstanceRequest) returns (Instance);
+
+  // List returns instances under a parent.
+  rpc List(ListInstancesRequest) returns (ListInstancesResponse);
+
+  // Create creates a new instance. Returns an Operation.
+  rpc Create(CreateInstanceRequest) returns (Operation);
+
+  // Delete deletes an instance. Returns an Operation.
+  rpc Delete(DeleteInstanceRequest) returns (Operation);
+
+  // Start starts a stopped instance. Returns an Operation.
+  rpc Start(StartInstanceRequest) returns (Operation);
+
+  // Stop stops a running instance. Returns an Operation.
+  rpc Stop(StopInstanceRequest) returns (Operation);
+}
+
+// ReservationService provides read access to reservations.
+service ReservationService {
+  rpc Get(GetReservationRequest) returns (Reservation);
+  rpc List(ListReservationsRequest) returns (ListReservationsResponse);
+}
+
+// --- Instance Requests ---
+
+message GetInstanceRequest {
+  string id = 1;
+}
+
+message ListInstancesRequest {
+  string parent_id = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message ListInstancesResponse {
+  repeated Instance instances = 1;
+  string next_page_token = 2;
+}
+
+message CreateInstanceRequest {
+  ResourceMetadata metadata = 1;  // parent_id, name, labels
+  InstanceSpec spec = 2;
+}
+
+message DeleteInstanceRequest {
+  string id = 1;
+}
+
+message StartInstanceRequest {
+  string id = 1;
+}
+
+message StopInstanceRequest {
+  string id = 1;
+}
+
+// --- Reservation Requests ---
+
+message GetReservationRequest {
+  string id = 1;
+}
+
+message ListReservationsRequest {
+  string parent_id = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message ListReservationsResponse {
+  repeated Reservation reservations = 1;
+  string next_page_token = 2;
+}
+
+// --- Operation ---
+
+message Operation {
+  string id = 1;
+  string parent_id = 2;
+  string resource_id = 3;
+  string description = 4;
+  bool done = 5;
+  OperationMetadata metadata = 6;
+}
+
+message OperationMetadata {
+  string service = 1;
+  string method = 2;
+}
