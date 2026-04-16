@@ -7,10 +7,10 @@ from vm_cli.config import load_config
 from vm_cli.errors import CliError, ProviderError, UnsupportedOperationError
 from vm_cli.models import CreateRequest
 from vm_cli.output import emit
-from vm_cli.providers import CrusoeProvider, LambdaProvider
+from vm_cli.providers import CrusoeProvider, LambdaProvider, NebiusProvider
 
-PROVIDER_CHOICES = ("crusoe", "lambda")
-GPU_CHOICES = ("a100.1x", "a100.8x", "h100.1x", "h100.8x")
+PROVIDER_CHOICES = ("crusoe", "lambda", "nebius")
+GPU_CHOICES = ("a100.1x", "a100.8x", "h100.1x", "h100.8x", "h200.1x", "h200.8x")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -121,6 +121,7 @@ def build_providers() -> dict[str, object]:
     return {
         "crusoe": CrusoeProvider(config.crusoe),
         "lambda": LambdaProvider(config.lambda_cloud),
+        "nebius": NebiusProvider(config.nebius),
     }
 
 

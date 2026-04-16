@@ -20,9 +20,19 @@ class LambdaConfig:
 
 
 @dataclass(frozen=True)
+class NebiusConfig:
+    endpoint: str
+    api_key: str
+    parent_id: str
+    poll_interval_seconds: float = 1.0
+    poll_timeout_seconds: float = 30.0
+
+
+@dataclass(frozen=True)
 class AppConfig:
     crusoe: CrusoeConfig
     lambda_cloud: LambdaConfig
+    nebius: NebiusConfig
     default_ssh_key: str
 
 
@@ -41,6 +51,11 @@ def load_config() -> AppConfig:
         lambda_cloud=LambdaConfig(
             base_url=_env("VM_CLI_LAMBDA_BASE_URL", "http://localhost:8002"),
             api_key=_env("VM_CLI_LAMBDA_API_KEY", "lambda-test-key-001"),
+        ),
+        nebius=NebiusConfig(
+            endpoint=_env("VM_CLI_NEBIUS_ENDPOINT", "grpc://localhost:50051"),
+            api_key=_env("VM_CLI_NEBIUS_API_KEY", "nebius-test-key-001"),
+            parent_id=_env("VM_CLI_NEBIUS_PARENT_ID", "project-e1a2b3c4"),
         ),
         default_ssh_key=_env("VM_CLI_DEFAULT_SSH_KEY", "default-key"),
     )

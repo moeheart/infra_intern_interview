@@ -169,3 +169,13 @@ Each provider handles reservations differently:
 - Reserved instances on Lambda can't be terminated — your fleet manager needs to handle this.
 - The Nebius proto files are in `mock_servers/proto/` — you'll need to compile them for your language.
 - Don't over-engineer Layer 1 — you need time for Layer 2.
+
+
+
+## Test
+
+python3 candidate/vm.py list
+python3 candidate/vm.py list --provider lambda
+python3 candidate/vm.py create --provider crusoe --gpu h100.1x --count 1 --region us-west
+python3 candidate/vm.py get <instance_id> --provider crusoe
+python3 candidate/vm.py destroy <instance_id> --provider lambda
