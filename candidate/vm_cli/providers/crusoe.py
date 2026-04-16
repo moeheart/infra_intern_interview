@@ -120,8 +120,8 @@ class CrusoeProvider(VMProvider):
 
         raise ProviderError(
             self.name,
-            f"Timed out waiting for operation {operation_id}",
-            code=last_payload.get("state") if last_payload else None,
+            f"Timed out waiting for operation {operation_id}.",
+            code="timeout",
         )
 
     def _normalize_instance(self, item: dict[str, Any]) -> InstanceRecord:
@@ -145,13 +145,13 @@ class CrusoeProvider(VMProvider):
 
     def _map_gpu(self, gpu: str) -> str:
         if gpu not in CANONICAL_GPU_CHOICES:
-            raise ProviderError(self.name, f"Unsupported GPU type '{gpu}'")
+            raise ProviderError(self.name, f"GPU type '{gpu}' is not supported by Crusoe.", code="unsupported")
         return gpu
 
     def _map_region(self, region: str) -> str:
         mapped = CANONICAL_REGION_ALIASES.get(region)
         if not mapped:
-            raise ProviderError(self.name, f"Unsupported region '{region}'")
+            raise ProviderError(self.name, f"Region '{region}' is not supported by Crusoe.", code="unsupported")
         return mapped
 
     def _instances_url(self) -> str:
@@ -172,8 +172,10 @@ class CrusoeProvider(VMProvider):
             return request_json(method, url, headers=headers, json_body=json_body)
         except HttpError as exc:
             raise _map_crusoe_error(exc) from exc
-        except (ConnectionError, TimeoutError) as exc:
-            raise ProviderError(self.name, str(exc)) from exc
+        except TimeoutError as exc:
+            raise ProviderError(self.name, "Timed out while waiting for Crusoe.", code="timeout") from exc
+        except ConnectionError as exc:
+            raise ProviderError(self.name, "Unable to reach Crusoe.", code="network") from exc
 
 
 def _map_crusoe_error(exc: HttpError) -> ProviderError:

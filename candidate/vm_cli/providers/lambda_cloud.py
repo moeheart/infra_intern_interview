@@ -108,13 +108,13 @@ class LambdaProvider(VMProvider):
     def _map_gpu(self, gpu: str) -> str:
         mapped = GPU_MAP.get(gpu)
         if not mapped:
-            raise ProviderError(self.name, f"Unsupported GPU type '{gpu}'")
+            raise ProviderError(self.name, f"GPU type '{gpu}' is not supported by Lambda.", code="unsupported")
         return mapped
 
     def _map_region(self, region: str) -> str:
         mapped = REGION_MAP.get(region)
         if not mapped:
-            raise ProviderError(self.name, f"Unsupported region '{region}'")
+            raise ProviderError(self.name, f"Region '{region}' is not supported by Lambda.", code="unsupported")
         return mapped
 
     def _url(self, path: str) -> str:
@@ -132,8 +132,10 @@ class LambdaProvider(VMProvider):
             return request_json(method, url, headers=headers, json_body=json_body)
         except HttpError as exc:
             raise _map_lambda_error(exc) from exc
-        except (ConnectionError, TimeoutError) as exc:
-            raise ProviderError(self.name, str(exc)) from exc
+        except TimeoutError as exc:
+            raise ProviderError(self.name, "Timed out while waiting for Lambda.", code="timeout") from exc
+        except ConnectionError as exc:
+            raise ProviderError(self.name, "Unable to reach Lambda.", code="network") from exc
 
 
 def _map_lambda_error(exc: HttpError) -> ProviderError:

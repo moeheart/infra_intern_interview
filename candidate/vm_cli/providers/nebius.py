@@ -153,8 +153,8 @@ class NebiusProvider(VMProvider):
 
         raise ProviderError(
             self.name,
-            f"Timed out waiting for instance {instance_id} to reach {sorted(desired_states)}",
-            code=last_state,
+            f"Timed out waiting for instance {instance_id} to reach {sorted(desired_states)}.",
+            code="timeout",
         )
 
     def _wait_until_deleted(self, instance_id: str) -> None:
@@ -164,12 +164,12 @@ class NebiusProvider(VMProvider):
             try:
                 self.get_instance(instance_id)
             except ProviderError as exc:
-                if exc.code == "NOT_FOUND":
+                if exc.code == "not_found":
                     return
                 raise
             time.sleep(self.config.poll_interval_seconds)
 
-        raise ProviderError(self.name, f"Timed out waiting for instance {instance_id} to be deleted")
+        raise ProviderError(self.name, f"Timed out waiting for instance {instance_id} to be deleted.", code="timeout")
 
     def _normalize_instance(self, item: Any) -> InstanceRecord:
         modules = self._load_modules()
@@ -199,7 +199,7 @@ class NebiusProvider(VMProvider):
     def _map_gpu(self, gpu: str) -> tuple[str, str]:
         mapped = GPU_MAP.get(gpu)
         if not mapped:
-            raise ProviderError(self.name, f"Unsupported GPU type '{gpu}'")
+            raise ProviderError(self.name, f"GPU type '{gpu}' is not supported by Nebius.", code="unsupported")
         return mapped
 
     def _metadata(self) -> list[tuple[str, str]]:
@@ -231,7 +231,11 @@ class NebiusProvider(VMProvider):
         repo_root = Path(__file__).resolve().parents[3]
         generated_dir = repo_root / "mock_servers" / "generated"
         if not generated_dir.exists():
-            raise ProviderError(self.name, f"Generated Nebius protobufs not found at {generated_dir}")
+            raise ProviderError(
+                self.name,
+                f"Generated Nebius protobufs were not found at {generated_dir}.",
+                code="configuration",
+            )
 
         generated_path = str(generated_dir)
         if generated_path not in sys.path:
@@ -247,6 +251,7 @@ class NebiusProvider(VMProvider):
             raise ProviderError(
                 self.name,
                 "Nebius provider requires grpcio and protobuf. Install `candidate/requirements.txt` or use the mock server venv.",
+                code="configuration",
             ) from exc
 
         self._modules = _NebiusModules(
