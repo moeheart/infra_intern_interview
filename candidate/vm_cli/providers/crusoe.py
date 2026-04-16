@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import time
+from dataclasses import replace
 from typing import Any
 
 from vm_cli.config import CrusoeConfig
 from vm_cli.errors import ProviderError
 from vm_cli.http import HttpError, request_json
-from vm_cli.models import ActionResult, CreateRequest, InstanceRecord
+from vm_cli.models import ActionResult, CapacityRecord, CreateRequest, InstanceRecord
 from vm_cli.providers.base import VMProvider
 
 CANONICAL_GPU_CHOICES = {"a100.1x", "a100.8x", "h100.1x", "h100.8x"}
@@ -71,6 +72,45 @@ class CrusoeProvider(VMProvider):
             instances.append(self.get_instance(resource_id))
 
         return instances
+
+    def list_capacity(self, gpu: str) -> list[CapacityRecord]:
+        if gpu not in CANONICAL_GPU_CHOICES:
+            return []
+
+        payload = self._request("GET", self._capacity_url())
+        records: list[CapacityRecord] = []
+        for item in payload.get("items", []):
+            if item.get("vm_type") != gpu:
+                continue
+            available = int(item.get("total_available", 0))
+            if available <= 0:
+                continue
+            records.append(
+                CapacityRecord(
+                    provider=self.name,
+                    region=CANONICAL_REGION_NAMES.get(item["location"], item["location"]),
+                    gpu=gpu,
+                    available=available,
+                    certainty="exact",
+                )
+            )
+        return records
+
+    def create_instances_best_effort(self, req: CreateRequest) -> list[InstanceRecord]:
+        created: list[InstanceRecord] = []
+        for index in range(req.count):
+            single_req = replace(
+                req,
+                count=1,
+                name=req.name if req.count == 1 else f"{req.name}-{index + 1}",
+            )
+            try:
+                created.extend(self.create_instances(single_req))
+            except ProviderError as exc:
+                if exc.code == "capacity":
+                    break
+                raise
+        return created
 
     def stop_instance(self, instance_id: str) -> ActionResult:
         return self._run_instance_action(instance_id, "STOP")
@@ -159,6 +199,9 @@ class CrusoeProvider(VMProvider):
             f"{self.config.base_url}/v1alpha5/projects/"
             f"{self.config.project_id}/compute/vms/instances"
         )
+
+    def _capacity_url(self) -> str:
+        return f"{self.config.base_url}/v1alpha5/projects/{self.config.project_id}/capacity"
 
     def _request(
         self,

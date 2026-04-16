@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import re
+from dataclasses import replace
 from typing import Any
 
 from vm_cli.config import LambdaConfig
 from vm_cli.errors import ProviderError, UnsupportedOperationError
 from vm_cli.http import HttpError, request_json
-from vm_cli.models import ActionResult, CreateRequest, InstanceRecord
+from vm_cli.models import ActionResult, CapacityRecord, CreateRequest, InstanceRecord
 from vm_cli.providers.base import VMProvider
 
 GPU_MAP = {
@@ -65,6 +67,46 @@ class LambdaProvider(VMProvider):
         payload = self._request("POST", self._url("/instance-operations/launch"), json_body=body)
         instance_ids = payload["data"]["instance_ids"]
         return [self.get_instance(instance_id) for instance_id in instance_ids]
+
+    def list_capacity(self, gpu: str) -> list[CapacityRecord]:
+        mapped_gpu = GPU_MAP.get(gpu)
+        if not mapped_gpu:
+            return []
+
+        payload = self._request("GET", self._url("/instance-types"))
+        type_payload = payload.get("data", {}).get(mapped_gpu, {})
+        records: list[CapacityRecord] = []
+        for region in type_payload.get("regions_with_capacity_available", []):
+            provider_region = region["name"]
+            records.append(
+                CapacityRecord(
+                    provider=self.name,
+                    region=CANONICAL_REGION_NAMES.get(provider_region, provider_region),
+                    gpu=gpu,
+                    available=None,
+                    certainty="unknown",
+                )
+            )
+        return records
+
+    def create_instances_best_effort(self, req: CreateRequest) -> list[InstanceRecord]:
+        try:
+            return self.create_instances(req)
+        except ProviderError as exc:
+            if exc.code != "capacity":
+                raise
+
+            available = _extract_available_capacity(exc.message)
+            if available <= 0:
+                return []
+
+            retry_req = replace(req, count=min(req.count, available))
+            try:
+                return self.create_instances(retry_req)
+            except ProviderError as retry_exc:
+                if retry_exc.code == "capacity":
+                    return []
+                raise
 
     def stop_instance(self, instance_id: str) -> ActionResult:
         raise UnsupportedOperationError(self.name, "stop")
@@ -149,3 +191,10 @@ def _map_lambda_error(exc: HttpError) -> ProviderError:
         status=exc.status,
         suggestion=error_block.get("suggestion"),
     )
+
+
+def _extract_available_capacity(message: str) -> int:
+    match = re.search(r"available\s+(\d+)", message)
+    if match:
+        return int(match.group(1))
+    return 0

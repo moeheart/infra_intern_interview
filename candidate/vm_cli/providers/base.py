@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from vm_cli.models import ActionResult, CreateRequest, InstanceRecord
+from vm_cli.models import ActionResult, CapacityRecord, CreateRequest, InstanceRecord
 
 
 class VMProvider(ABC):
@@ -18,6 +18,14 @@ class VMProvider(ABC):
 
     @abstractmethod
     def create_instances(self, req: CreateRequest) -> list[InstanceRecord]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def list_capacity(self, gpu: str) -> list[CapacityRecord]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def create_instances_best_effort(self, req: CreateRequest) -> list[InstanceRecord]:
         raise NotImplementedError
 
     @abstractmethod

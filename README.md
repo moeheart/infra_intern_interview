@@ -75,7 +75,7 @@ vm fleet destroy <fleet_name>
 1. **Cross-provider scheduling**: Query all providers for capacity, then allocate across them to fulfill the request.
 2. **Partial failure handling**: If you need 8 VMs and provider A only has 3, get the rest from provider B/C.
 3. **Rollback**: If the total request can't be fulfilled, clean up any VMs that were already created.
-4. **Fleet state tracking**: Persist which VMs belong to which fleet (file, SQLite, etc.).
+4. **Fleet state tracking**: Persist which VMs belong to which fleet (**file**, SQLite, etc.).
 5. **Concurrent operations**: Don't create VMs one at a time — parallelize across providers.
 
 ---

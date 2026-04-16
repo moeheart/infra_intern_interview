@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from importlib import import_module
 from pathlib import Path
 from typing import Any
 
 from vm_cli.config import NebiusConfig
 from vm_cli.errors import ProviderError
-from vm_cli.models import ActionResult, CreateRequest, InstanceRecord
+from vm_cli.models import ActionResult, CapacityRecord, CreateRequest, InstanceRecord
 from vm_cli.providers.base import VMProvider
 
 GPU_MAP = {
@@ -88,6 +88,35 @@ class NebiusProvider(VMProvider):
             records.append(self._wait_for_instance_state(operation.resource_id, {"running"}))
 
         return records
+
+    def list_capacity(self, gpu: str) -> list[CapacityRecord]:
+        if gpu not in GPU_MAP:
+            return []
+        return [
+            CapacityRecord(
+                provider=self.name,
+                region="global",
+                gpu=gpu,
+                available=None,
+                certainty="unknown",
+            )
+        ]
+
+    def create_instances_best_effort(self, req: CreateRequest) -> list[InstanceRecord]:
+        created: list[InstanceRecord] = []
+        for index in range(req.count):
+            single_req = replace(
+                req,
+                count=1,
+                name=req.name if req.count == 1 else f"{req.name}-{index + 1}",
+            )
+            try:
+                created.extend(self.create_instances(single_req))
+            except ProviderError as exc:
+                if exc.code == "capacity":
+                    break
+                raise
+        return created
 
     def stop_instance(self, instance_id: str) -> ActionResult:
         operation = self._rpc(

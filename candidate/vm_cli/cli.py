@@ -4,10 +4,13 @@ import argparse
 import sys
 
 from vm_cli.config import load_config
+from vm_cli.fleet import FleetManager
+from vm_cli.fleet_store import FleetStore
 from vm_cli.errors import CliError, ProviderError, UnsupportedOperationError
 from vm_cli.models import CreateRequest
 from vm_cli.output import emit
 from vm_cli.providers import CrusoeProvider, LambdaProvider, NebiusProvider
+from vm_cli.providers.base import VMProvider
 
 PROVIDER_CHOICES = ("crusoe", "lambda", "nebius")
 GPU_CHOICES = ("a100.1x", "a100.8x", "h100.1x", "h100.8x", "h200.1x", "h200.8x")
@@ -31,6 +34,28 @@ def main(argv: list[str] | None = None) -> int:
                 records.extend(providers[provider_name].list_instances())
             emit(records, args.json)
             return 0
+
+        if args.command == "fleet":
+            fleet_manager = build_fleet_manager(providers)
+
+            if args.fleet_command == "create":
+                emit(fleet_manager.create_fleet(args.gpu, args.count, name=args.name), args.json)
+                return 0
+
+            if args.fleet_command == "list":
+                emit(fleet_manager.list_fleets(), args.json)
+                return 0
+
+            if args.fleet_command == "status":
+                emit(fleet_manager.get_fleet_status(args.fleet_name), args.json)
+                return 0
+
+            if args.fleet_command == "destroy":
+                emit(fleet_manager.destroy_fleet(args.fleet_name), args.json)
+                return 0
+
+            parser.error(f"Unknown fleet command: {args.fleet_command}")
+            return 1
 
         provider = providers[args.provider]
 
@@ -113,16 +138,45 @@ def build_parser() -> argparse.ArgumentParser:
     destroy_parser.add_argument("--provider", choices=PROVIDER_CHOICES, required=True)
     _add_json_flag(destroy_parser)
 
+    fleet_parser = subparsers.add_parser("fleet", help="Manage fleets")
+    fleet_subparsers = fleet_parser.add_subparsers(dest="fleet_command")
+
+    fleet_create_parser = fleet_subparsers.add_parser("create", help="Create a fleet")
+    fleet_create_parser.add_argument("--gpu", choices=GPU_CHOICES, required=True)
+    fleet_create_parser.add_argument("--count", type=int, required=True)
+    fleet_create_parser.add_argument("--name")
+    _add_json_flag(fleet_create_parser)
+
+    fleet_list_parser = fleet_subparsers.add_parser("list", help="List fleets")
+    _add_json_flag(fleet_list_parser)
+
+    fleet_status_parser = fleet_subparsers.add_parser("status", help="Show fleet status")
+    fleet_status_parser.add_argument("fleet_name")
+    _add_json_flag(fleet_status_parser)
+
+    fleet_destroy_parser = fleet_subparsers.add_parser("destroy", help="Destroy a fleet")
+    fleet_destroy_parser.add_argument("fleet_name")
+    _add_json_flag(fleet_destroy_parser)
+
     return parser
 
 
-def build_providers() -> dict[str, object]:
+def build_providers() -> dict[str, VMProvider]:
     config = load_config()
     return {
         "crusoe": CrusoeProvider(config.crusoe),
         "lambda": LambdaProvider(config.lambda_cloud),
         "nebius": NebiusProvider(config.nebius),
     }
+
+
+def build_fleet_manager(providers: dict[str, VMProvider]) -> FleetManager:
+    config = load_config()
+    return FleetManager(
+        providers,
+        FleetStore(config.fleet_state_path),
+        default_ssh_key=config.default_ssh_key,
+    )
 
 
 def _add_json_flag(parser: argparse.ArgumentParser) -> None:

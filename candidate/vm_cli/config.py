@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
 
 
 @dataclass(frozen=True)
@@ -34,6 +35,7 @@ class AppConfig:
     lambda_cloud: LambdaConfig
     nebius: NebiusConfig
     default_ssh_key: str
+    fleet_state_path: Path
 
 
 def _env(name: str, default: str) -> str:
@@ -42,6 +44,7 @@ def _env(name: str, default: str) -> str:
 
 
 def load_config() -> AppConfig:
+    candidate_dir = Path(__file__).resolve().parents[1]
     return AppConfig(
         crusoe=CrusoeConfig(
             base_url=_env("VM_CLI_CRUSOE_BASE_URL", "http://localhost:8001"),
@@ -58,4 +61,5 @@ def load_config() -> AppConfig:
             parent_id=_env("VM_CLI_NEBIUS_PARENT_ID", "project-e1a2b3c4"),
         ),
         default_ssh_key=_env("VM_CLI_DEFAULT_SSH_KEY", "default-key"),
+        fleet_state_path=Path(_env("VM_CLI_FLEET_STATE_PATH", str(candidate_dir / ".vm_fleets.json"))),
     )
