@@ -90,3 +90,8 @@ class NebiusProviderIntegrationTest(unittest.TestCase):
                     self.provider.destroy_instance(instance_id)
                 except ProviderError:
                     pass
+
+    def test_destroy_missing_instance_returns_provider_error(self) -> None:
+        with self.assertRaises(ProviderError) as ctx:
+            self.provider.destroy_instance(str(uuid.uuid4()))
+        self.assertEqual(ctx.exception.code, "NOT_FOUND")

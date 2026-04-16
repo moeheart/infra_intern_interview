@@ -51,17 +51,17 @@ class NebiusProvider(VMProvider):
 
     def list_instances(self) -> list[InstanceRecord]:
         modules = self._load_modules()
-        response = self._get_instance_stub().List(
+        response = self._rpc(
+            self._get_instance_stub().List,
             modules.service_pb2.ListInstancesRequest(parent_id=self.config.parent_id),
-            metadata=self._metadata(),
         )
         return [self._normalize_instance(item) for item in response.instances]
 
     def get_instance(self, instance_id: str) -> InstanceRecord:
         modules = self._load_modules()
-        instance = self._get_instance_stub().Get(
+        instance = self._rpc(
+            self._get_instance_stub().Get,
             modules.service_pb2.GetInstanceRequest(id=instance_id),
-            metadata=self._metadata(),
         )
         return self._normalize_instance(instance)
 
@@ -84,15 +84,15 @@ class NebiusProvider(VMProvider):
                     reservation_policy=reservation_policy,
                 ),
             )
-            operation = self._get_instance_stub().Create(request, metadata=self._metadata())
+            operation = self._rpc(self._get_instance_stub().Create, request)
             records.append(self._wait_for_instance_state(operation.resource_id, {"running"}))
 
         return records
 
     def stop_instance(self, instance_id: str) -> ActionResult:
-        operation = self._get_instance_stub().Stop(
+        operation = self._rpc(
+            self._get_instance_stub().Stop,
             self._load_modules().service_pb2.StopInstanceRequest(id=instance_id),
-            metadata=self._metadata(),
         )
         instance = self._wait_for_instance_state(operation.resource_id, {"stopped"})
         return ActionResult(
@@ -104,9 +104,9 @@ class NebiusProvider(VMProvider):
         )
 
     def start_instance(self, instance_id: str) -> ActionResult:
-        operation = self._get_instance_stub().Start(
+        operation = self._rpc(
+            self._get_instance_stub().Start,
             self._load_modules().service_pb2.StartInstanceRequest(id=instance_id),
-            metadata=self._metadata(),
         )
         instance = self._wait_for_instance_state(operation.resource_id, {"running"})
         return ActionResult(
@@ -118,9 +118,9 @@ class NebiusProvider(VMProvider):
         )
 
     def destroy_instance(self, instance_id: str) -> ActionResult:
-        operation = self._get_instance_stub().Delete(
+        operation = self._rpc(
+            self._get_instance_stub().Delete,
             self._load_modules().service_pb2.DeleteInstanceRequest(id=instance_id),
-            metadata=self._metadata(),
         )
         self._wait_until_deleted(operation.resource_id)
         return ActionResult(
@@ -205,6 +205,13 @@ class NebiusProvider(VMProvider):
     def _metadata(self) -> list[tuple[str, str]]:
         return [("authorization", f"Bearer {self.config.api_key}")]
 
+    def _rpc(self, method: Any, request: Any) -> Any:
+        modules = self._load_modules()
+        try:
+            return method(request, metadata=self._metadata())
+        except modules.grpc.RpcError as exc:
+            raise self._map_grpc_error(exc) from exc
+
     def _endpoint(self) -> str:
         if self.config.endpoint.startswith("grpc://"):
             return self.config.endpoint[len("grpc://") :]
@@ -250,3 +257,15 @@ class NebiusProvider(VMProvider):
             message_to_dict=json_format.MessageToDict,
         )
         return self._modules
+
+    def _map_grpc_error(self, exc: Any) -> ProviderError:
+        code = None
+        details = "Nebius RPC failed"
+
+        if hasattr(exc, "code"):
+            status = exc.code()
+            code = status.name if hasattr(status, "name") else str(status)
+        if hasattr(exc, "details"):
+            details = exc.details() or details
+
+        return ProviderError(self.name, details, code=code)
